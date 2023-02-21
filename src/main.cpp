@@ -8,54 +8,51 @@
 ********************************************************************************************/
 
 #include <Arduino.h>
+#include "main.h"
 
 // Pins
 const byte sensorPin = A0; // Potentiometer input Pin
-const byte crankPin = 5;   // Crankshaft simulation output
-const byte camPin = 5;     // Crankshaft simulation output
+const byte crankPin = 8;   // Crankshaft simulation output
+const byte camPin = 9;     // Crankshaft simulation output
 
-volatile boolean crankState; // Store output state
-volatile boolean camState;   // Store output state
-
-volatile uint16_t sensorValue; // Store pot value
-
-uint16_t previousMicros = 0;
 uint16_t interval; // Store value used to compare to Micros count
-uint16_t time;
-uint16_t previousTime = 0;
-uint16_t i = 0;
+
+uint16_t timerCount;
+
+extern volatile boolean crankState; // Store output state
+extern volatile boolean camState;   // Store output state
+
+uint16_t sensorValue; // Store pot value
 
 void setup()
 {
+  initBoard(); // Setup Timers for selected board.
 
-  pinMode(crankPin, OUTPUT); // Set crankPin as output
+  pinMode(sensorPin, INPUT); // set potentiometer as an input
+  pinMode(crankPin, OUTPUT); // set crankPin as an output
+  pinMode(camPin, OUTPUT);   // set camPin as an output
+
+  crankState = 1;
 }
 
 void loop()
 {
   sensorValue = analogRead(sensorPin);
-  interval = map(sensorValue, 0, 1023, 24, 4092);
+  interval = map(sensorValue, 0, 1023, 255, 7);
+}
 
-  uint32_t currentMicros = micros();
+ISR(TIMER1_COMPA_vect)
+{
+  PORTB = (crankState); // Send indexed data to crank/cam pins
 
-  time = currentMicros - previousMicros;
-  if (time > interval)
+  digitalWrite(crankPin, crankState);
+  TCNT1 = 0;
+
+  timerCount++; // increment the timer count
+  if (timerCount > interval)
   {
-    previousMicros = currentMicros;
-    i++;
+    twelve_minus_one_with_cam();
 
-    if (i <= 23) // Cycle crankState 23 times.
-    {
-      crankState = !crankState;
-      digitalWrite(crankPin, crankState);
-    }
-
-    if (i == 24) // Hold for missing trigger for 1 cycle.
-    {
-      // Set i to 1 and start over.
-      time = currentMicros - previousTime;
-      previousTime = currentMicros;
-      i = 1;
-    }
+    timerCount = 0;
   }
 }
